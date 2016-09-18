@@ -25,13 +25,11 @@ defmodule Appcues.RedisCache.Worker do
     opts = opts || []
     ttl = opts[:ttl] || state.default_ttl
     command = ["SET", key_string, value_string, "PX", "#{ttl}"]
-    |> IO.inspect
     set_reply = case Redix.command(state.redis_conn, command) do
       {:ok, _} -> :ok
       {:error, e} -> {:error, e}
     end
     {:reply, set_reply, state}
-    |> IO.inspect
   end
 
   @type get_call :: {:get, String.t, Keyword.t}
@@ -41,9 +39,7 @@ defmodule Appcues.RedisCache.Worker do
     #opts = opts || []
     state = connect(state)
     command = ["GET", key_string]
-    |> IO.inspect
     {:reply, Redix.command(state.redis_conn, command), state}
-    |> IO.inspect
   end
 
   @spec connect(state) :: state

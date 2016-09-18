@@ -97,15 +97,17 @@ defmodule Appcues.RedisCache do
   @spec get_with_pool(json_encodable, Keyword.t, atom) ::
     {:ok, json_encodable} | {:error, any}
   def get_with_pool(key, opts, pool_name) do
-    key_string = Poison.encode!(key)
-    :poolboy.transaction pool_name, fn (worker_pid) ->
-      case :gen_server.call(worker_pid, {:get, key_string, opts}) do
-        {:ok, nil} ->
-          {:ok, nil}
-        {:ok, value_string} ->
-          {:ok, Poison.decode!(value_string)}
-        {:error, e} ->
-          {:error, e}
+    with {:ok, key_string} <- Poison.encode(key)
+    do
+      :poolboy.transaction pool_name, fn (worker_pid) ->
+        case :gen_server.call(worker_pid, {:get, key_string, opts}) do
+          {:ok, nil} ->
+            {:ok, nil}
+          {:ok, value_string} ->
+            Poison.decode(value_string)
+          {:error, e} ->
+            {:error, e}
+        end
       end
     end
   end
