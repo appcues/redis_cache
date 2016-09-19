@@ -11,5 +11,9 @@ if Mix.env == :test do
   config :appcues_redis_cache, Appcues.RedisCache,
     redis_url: "redis://localhost:6379/",
     default_ttl: 1_000
+
+  config :appcues_redis_cache, Appcues.TestRedisCache,
+    redis_url: "redis://localhost:6379/2",
+    default_ttl: 1_000
 end
 

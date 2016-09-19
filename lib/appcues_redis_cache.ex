@@ -59,10 +59,7 @@ defmodule Appcues.RedisCache do
     config(module)[key]
   end
 
-  @doc false
-  def start_with_module_and_pool(_type, _args, module, pool_name) do
-    import Supervisor.Spec, warn: false
-
+  defp poolboy_child_spec(module, pool_name) do
     poolboy_config = [
       name: {:local, pool_name},
       worker_module: Appcues.RedisCache.Worker,
@@ -77,11 +74,18 @@ defmodule Appcues.RedisCache do
         raise "missing `:redis_url` config.  Add it with `config :appcues_redis_cache, #{module}, redis_url: \"redis://:my_password@my_hostname:6379/my_database\"`"
     ]
 
-    children = [
-       :poolboy.child_spec(pool_name, poolboy_config, worker_config)
-    ]
+    :poolboy.child_spec(pool_name, poolboy_config, worker_config)
+  end
 
-    opts = [strategy: :one_for_one, name: Api.RedisCache.Supervisor]
+
+  @doc false
+  def start_with_module_and_pool(_type, _args, module, pool_name) do
+    import Supervisor.Spec, warn: false
+
+    children = [poolboy_child_spec(module, pool_name)]
+    supervisor_name = Module.concat(module, Supervisor)
+
+    opts = [strategy: :one_for_one, name: supervisor_name]
     Supervisor.start_link(children, opts)
   end
 
@@ -125,9 +129,9 @@ defmodule Appcues.RedisCache do
     end
   end
 
-  @spec get_or_store_with_pool(json_encodable, (() -> json_encodable), Keyword.t, atom) ::
+  @spec get_or_store_with_pool(json_encodable, Keyword.t, (() -> json_encodable), atom) ::
     {:ok, json_encodable} | {:error, any}
-  def get_or_store_with_pool(key, fun, opts, pool_name) do
+  def get_or_store_with_pool(key, opts, fun, pool_name) do
     with {:ok, val} <- get_with_pool(key, opts, pool_name)
     do
       case val do
