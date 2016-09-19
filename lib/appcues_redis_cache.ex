@@ -77,6 +77,16 @@ defmodule Appcues.RedisCache do
       end
 
       @doc ~S"""
+      Gets the specified item from the cache.
+      Returns `nil` if not found, the value if found, or raises an exception.
+      """
+      @spec get!(Appcues.RedisCache.json_encodable, Keyword.t) :: Appcues.RedisCache.json_encodable | no_return
+      def get!(key, opts \\ []) do
+        {:ok, val} = get(key, opts)
+        val
+      end
+
+      @doc ~S"""
       Sets the value stored under the given key.
       `opts[:ttl]` may be given to specify the time-to-live in milliseconds.
       Returns `:ok` or `{:error, e}`.
@@ -85,6 +95,18 @@ defmodule Appcues.RedisCache do
       def set(key, value, opts \\ []) do
         Appcues.RedisCache.Calls.set_with_pool(key, value, opts, @pool_name)
       end
+
+      @doc ~S"""
+      Sets the value stored under the given key.
+      `opts[:ttl]` may be given to specify the time-to-live in milliseconds.
+      Returns `:ok` or raises exception.
+      """
+      @spec set(Appcues.RedisCache.json_encodable, Appcues.RedisCache.json_encodable, Keyword.t) :: :ok | no_return
+      def set!(key, value, opts \\ []) do
+        :ok = set(key, value, opts)
+        :ok
+      end
+
 
       @doc ~S"""
       Retrieves a value if it exists in the cache.
@@ -99,12 +121,30 @@ defmodule Appcues.RedisCache do
       def get_or_store(key, opts, fun) do
         Appcues.RedisCache.Calls.get_or_store_with_pool(key, opts, fun, @pool_name)
       end
+
+
+      @doc ~S"""
+      Retrieves a value if it exists in the cache.
+      Otherwise, executes `fun` and caches the result.
+      `opts[:ttl]` may be given to specify the time-to-live in milliseconds.
+      Returns value (may be nil) or raises an exception.
+      """
+      @spec get_or_store!(Appcues.RedisCache.json_encodable, (() -> Appcues.RedisCache.json_encodable)) :: Appcues.RedisCache.json_encodable | no_return
+      def get_or_store!(key, fun), do: get_or_store!(key, [], fun)
+
+      @spec get_or_store!(Appcues.RedisCache.json_encodable, Keyword.t, (() -> Appcues.RedisCache.json_encodable)) :: Appcues.RedisCache.json_encodable | no_return
+      def get_or_store!(key, opts, fun) do
+        {:ok, val} = get_or_store(key, opts, fun)
+        val
+      end
+
     end
   end
 
 
   use Application
 
+  @doc false
   def start(_type, _args) do
     import Supervisor.Spec, warn: false
     children = []

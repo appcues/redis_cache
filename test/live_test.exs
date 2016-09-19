@@ -20,8 +20,9 @@ defmodule Appcues.RedisCache.LiveTests do
 
   context "set/get" do
     it "handles valid input" do
-      assert(:ok = Appcues.TestRedisCache.set(:key1, "value1"))
+      assert(:ok = Appcues.TestRedisCache.set!(:key1, "value1"))
       assert({:ok, "value1"} = Appcues.TestRedisCache.get(:key1))
+      assert("value1" = Appcues.TestRedisCache.get!(:key1))
     end
 
     it "rejects non-JSON input" do
@@ -40,7 +41,7 @@ defmodule Appcues.RedisCache.LiveTests do
 
     it "handles cache misses" do
       assert({:ok, nil} = Appcues.TestRedisCache.get(:omg))
-      assert({:ok, 1} = Appcues.TestRedisCache.get_or_store(:omg, fn -> 1 end))
+      assert(1 = Appcues.TestRedisCache.get_or_store!(:omg, fn -> 1 end))
       assert({:ok, 1} = Appcues.TestRedisCache.get(:omg))
     end
   end
