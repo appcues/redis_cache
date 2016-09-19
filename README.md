@@ -1,24 +1,16 @@
-# Api.RedisCache
+# Appcues.RedisCache
 
-**TODO: Add description**
+A wrapper around Redis that provides `get`, `set`, and `get_or_store`.
 
-## Installation
+See [lib/appcues_redis_cache.ex] for usage information.
 
-If [available in Hex](https://hex.pm/docs/publish), the package can be installed as:
+## Testing
 
-  1. Add `api_redis_cache` to your list of dependencies in `mix.exs`:
+Testing without Redis running locally:
 
-    ```elixir
-    def deps do
-      [{:api_redis_cache, "~> 0.1.0"}]
-    end
-    ```
+    mix test
 
-  2. Ensure `api_redis_cache` is started before your application:
+Testing with Redis running locally at `redis://localhost:6379`:
 
-    ```elixir
-    def application do
-      [applications: [:api_redis_cache]]
-    end
-    ```
+    mix test --include=redis
 

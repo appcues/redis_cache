@@ -48,7 +48,15 @@ defmodule Appcues.RedisCache do
     end
   end
 
-  use Appcues.RedisCache.Using
+  ## OTP app gunk
+  use Application
+
+  def start(_type, _args) do
+    import Supervisor.Spec, warn: false
+    children = []
+    opts = [strategy: :one_for_one, name: Appcues.RedisCache.Supervisor]
+    Supervisor.start_link(children, opts)
+  end
 
 
   defp config(module) do
@@ -69,6 +77,7 @@ defmodule Appcues.RedisCache do
 
     worker_config = [
       pool_name: pool_name,
+      disabled: config(module, :disabled) || false,
       default_ttl: config(module, :default_ttl) || 60_000,
       redis_url: config(module, :redis_url) ||
         raise "missing `:redis_url` config.  Add it with `config :appcues_redis_cache, #{module}, redis_url: \"redis://:my_password@my_hostname:6379/my_database\"`"

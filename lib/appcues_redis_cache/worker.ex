@@ -11,11 +11,24 @@ defmodule Appcues.RedisCache.Worker do
   @spec init(Keyword.t) :: {:ok, state}
   def init(opts) do
     {:ok, %{
+      disabled: opts[:disabled],
       default_ttl: opts[:default_ttl],
       redis_url: opts[:redis_url],
       redis_conn: nil,
     }}
   end
+
+  ## Handle disabled state
+
+  def handle_call({:set, _key, _value, _opts}, _from, %{disabled: true}=state) do
+    {:reply, :ok, state}
+  end
+
+  def handle_call({:get, _key, _opts}, _from, %{disabled: true}=state) do
+    {:reply, {:ok, nil}, state}
+  end
+
+
 
   @type set_call :: {:set, String.t, String.t, Keyword.t}
   @type set_reply :: :ok | {:error, any}
