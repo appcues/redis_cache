@@ -13,8 +13,8 @@ defmodule Appcues.RedisCache.LiveTests do
   @moduletag :redis
 
   setup_all do
-    Appcues.TestRedisCache.start("x", "y")
-    Appcues.TestRedisCache2.start("x", "y")
+    Appcues.TestRedisCache.start_link
+    Appcues.TestRedisCache2.start_link
     :ok
   end
 

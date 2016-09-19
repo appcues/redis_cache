@@ -6,7 +6,7 @@ defmodule Appcues.RedisCache.DisabledTests do
   use ExSpec, async: true
 
   setup_all do
-    Appcues.DisabledRedisCache.start(:x, :y)
+    Appcues.DisabledRedisCache.start_link
     :ok
   end
 

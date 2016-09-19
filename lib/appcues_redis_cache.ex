@@ -42,63 +42,6 @@ defmodule Appcues.RedisCache do
       :ok = MyApp.RedisCache.put("my_val_cache_key", opts)
   """
 
-  defmacro __using__(_args) do
-    quote do
-      use Appcues.RedisCache.Using
-    end
-  end
-
-  ## OTP app gunk
-  use Application
-
-  def start(_type, _args) do
-    import Supervisor.Spec, warn: false
-    children = []
-    opts = [strategy: :one_for_one, name: Appcues.RedisCache.Supervisor]
-    Supervisor.start_link(children, opts)
-  end
-
-
-  defp config(module) do
-    Application.get_env(:appcues_redis_cache, module) || []
-  end
-
-  defp config(module, key) do
-    config(module)[key]
-  end
-
-  defp poolboy_child_spec(module, pool_name) do
-    poolboy_config = [
-      name: {:local, pool_name},
-      worker_module: Appcues.RedisCache.Worker,
-      size: config(module, :pool_size) || 20,
-      max_overflow: config(module, :pool_max_overflow) || 50,
-    ]
-
-    worker_config = [
-      pool_name: pool_name,
-      disabled: config(module, :disabled) || false,
-      default_ttl: config(module, :default_ttl) || 60_000,
-      redis_url: config(module, :redis_url) ||
-        raise "missing `:redis_url` config.  Add it with `config :appcues_redis_cache, #{module}, redis_url: \"redis://:my_password@my_hostname:6379/my_database\"`"
-    ]
-
-    :poolboy.child_spec(pool_name, poolboy_config, worker_config)
-  end
-
-
-  @doc false
-  def start_with_module_and_pool(_type, _args, module, pool_name) do
-    import Supervisor.Spec, warn: false
-
-    children = [poolboy_child_spec(module, pool_name)]
-    supervisor_name = Module.concat(module, Supervisor)
-
-    opts = [strategy: :one_for_one, name: supervisor_name]
-    Supervisor.start_link(children, opts)
-  end
-
-
   @type json_encodable ::
     nil |
     number |
@@ -106,54 +49,67 @@ defmodule Appcues.RedisCache do
     %{String.t => json_encodable} |
     [json_encodable]
 
-  @doc false
-  @spec get_with_pool(json_encodable, Keyword.t, atom) ::
-    {:ok, json_encodable} | {:error, any}
-  def get_with_pool(key, opts, pool_name) do
-    with {:ok, key_string} <- Poison.encode(key)
-    do
-      :poolboy.transaction pool_name, fn (worker_pid) ->
-        case :gen_server.call(worker_pid, {:get, key_string, opts}) do
-          {:ok, nil} ->
-            {:ok, nil}
-          {:ok, value_string} ->
-            Poison.decode(value_string)
-          {:error, e} ->
-            {:error, e}
-        end
+  defmacro __using__(_args) do
+    quote do
+      @pool_name Module.concat(__MODULE__, Pool)
+
+      use Supervisor
+
+      @doc false
+      def start_link(opts \\ []) do
+        Supervisor.start_link(__MODULE__, opts)
+      end
+
+      @doc false
+      def init(_opts) do
+        poolboy_child_spec = Appcues.RedisCache.Utils.poolboy_child_spec(__MODULE__, @pool_name)
+        supervise([poolboy_child_spec], strategy: :one_for_one)
+      end
+
+
+      @doc ~S"""
+      Gets the specified item from the cache.
+      Returns `{:ok, nil}` if not found, `{:ok, value}` if found, or `{:error, e}`.
+      """
+      @spec get(Appcues.RedisCache.json_encodable, Keyword.t) :: {:ok, Appcues.RedisCache.json_encodable} | {:error, any}
+      def get(key, opts \\ []) do
+        Appcues.RedisCache.Calls.get_with_pool(key, opts, @pool_name)
+      end
+
+      @doc ~S"""
+      Sets the value stored under the given key.
+      `opts[:ttl]` may be given to specify the time-to-live in milliseconds.
+      Returns `:ok` or `{:error, e}`.
+      """
+      @spec set(Appcues.RedisCache.json_encodable, Appcues.RedisCache.json_encodable, Keyword.t) :: :ok | {:error, any}
+      def set(key, value, opts \\ []) do
+        Appcues.RedisCache.Calls.set_with_pool(key, value, opts, @pool_name)
+      end
+
+      @doc ~S"""
+      Retrieves a value if it exists in the cache.
+      Otherwise, executes `fun` and caches the result.
+      `opts[:ttl]` may be given to specify the time-to-live in milliseconds.
+      Returns `{:ok, value}` or `{:error, e}`.
+      """
+      @spec get_or_store(Appcues.RedisCache.json_encodable, (() -> Appcues.RedisCache.json_encodable)) :: {:ok,Appcues.RedisCache.json_encodable} | {:error, any}
+      def get_or_store(key, fun), do: get_or_store(key, [], fun)
+
+      @spec get_or_store(Appcues.RedisCache.json_encodable, Keyword.t, (() -> Appcues.RedisCache.json_encodable)) :: {:ok, Appcues.RedisCache.json_encodable} | {:error, any}
+      def get_or_store(key, opts, fun) do
+        Appcues.RedisCache.Calls.get_or_store_with_pool(key, opts, fun, @pool_name)
       end
     end
   end
 
-  @doc false
-  @spec set_with_pool(json_encodable, json_encodable, Keyword.t, atom) ::
-    :ok | {:error, any}
-  def set_with_pool(key, value, opts, pool_name) do
-    with {:ok, key_string} <- Poison.encode(key),
-         {:ok, value_string} <- Poison.encode(value)
-    do
-      :poolboy.transaction pool_name, fn (worker_pid) ->
-        :gen_server.call(worker_pid, {:set, key_string, value_string, opts})
-      end
-    end
-  end
 
-  @spec get_or_store_with_pool(json_encodable, Keyword.t, (() -> json_encodable), atom) ::
-    {:ok, json_encodable} | {:error, any}
-  def get_or_store_with_pool(key, opts, fun, pool_name) do
-    with {:ok, val} <- get_with_pool(key, opts, pool_name)
-    do
-      case val do
-        nil ->
-          new_val = fun.()
-          case set_with_pool(key, new_val, opts, pool_name) do
-            :ok -> {:ok, new_val}
-            {:error, e} -> {:error, e}
-          end
-        val ->
-          {:ok, val}
-      end
-    end
+  use Application
+
+  def start(_type, _args) do
+    import Supervisor.Spec, warn: false
+    children = []
+    opts = [strategy: :one_for_one, name: Appcues.RedisCache.Supervisor]
+    Supervisor.start_link(children, opts)
   end
 
 end
