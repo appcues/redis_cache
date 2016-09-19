@@ -39,7 +39,7 @@ defmodule Appcues.RedisCache do
 
       {:ok, my_val} = MyApp.RedisCache.get("my_val_cache_key")
 
-      :ok = MyApp.RedisCache.put("my_val_cache_key", opts)
+      :ok = MyApp.RedisCache.put("my_val_cache_key", "new_value", opts)
   """
 
   @type json_encodable ::
