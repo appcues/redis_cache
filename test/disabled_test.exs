@@ -20,5 +20,9 @@ defmodule Appcues.RedisCache.DisabledTests do
     assert({:ok, nil} = Appcues.DisabledRedisCache.get("456"))
     assert({:ok, 22} = Appcues.DisabledRedisCache.get_or_store("456", fn -> 22 end))
   end
+
+  it "shunts command calls" do
+    assert({:ok, nil} = Appcues.DisabledRedisCache.command(["SET", "x", "y", "PX", "1"]))
+  end
 end
 

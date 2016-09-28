@@ -12,7 +12,6 @@ defmodule Appcues.RedisCache.Worker do
   def init(opts) do
     {:ok, %{
       disabled: opts[:disabled],
-      default_ttl: opts[:default_ttl],
       redis_url: opts[:redis_url],
       redis_conn: nil,
     }}
@@ -20,39 +19,17 @@ defmodule Appcues.RedisCache.Worker do
 
   ## Handle disabled state
 
-  def handle_call({:set, _key, _value, _opts}, _from, %{disabled: true}=state) do
-    {:reply, :ok, state}
-  end
-
-  def handle_call({:get, _key, _opts}, _from, %{disabled: true}=state) do
+  def handle_call(_msg, _from, %{disabled: true}=state) do
     {:reply, {:ok, nil}, state}
   end
 
-
-
-  @type set_call :: {:set, String.t, String.t, Keyword.t}
-  @type set_reply :: :ok | {:error, any}
-  @spec handle_call(set_call, pid, state) :: {:reply, set_reply, state}
-  def handle_call({:set, key_string, value_string, opts}, _from, state) do
+  @type call_reply :: {:ok, String.t | nil} :: {:error, any}
+  @spec handle_call({:command, [String.t]}, pid, %{}) :: {:reply, call_reply, %{}}
+  def handle_call({:command, cmd}, _from, state) do
     state = connect(state)
-    opts = opts || []
-    ttl = opts[:ttl] || state.default_ttl
-    command = ["SET", key_string, value_string, "PX", "#{ttl}"]
-    set_reply = case Redix.command(state.redis_conn, command) do
-      {:ok, _} -> :ok
-      {:error, e} -> {:error, e}
-    end
-    {:reply, set_reply, state}
-  end
-
-  @type get_call :: {:get, String.t, Keyword.t}
-  @type get_reply :: {:ok, String.t | nil} | {:error, any}
-  @spec handle_call(get_call, pid, state) :: {:reply, get_reply, state}
-  def handle_call({:get, key_string, _opts}, _from, state) do
-    #opts = opts || []
-    state = connect(state)
-    command = ["GET", key_string]
-    {:reply, Redix.command(state.redis_conn, command), state}
+    cmd = Enum.map(cmd, &Kernel.to_string/1)
+    reply = Redix.command(state.redis_conn, cmd)
+    {:reply, reply, state}
   end
 
   @spec connect(state) :: state

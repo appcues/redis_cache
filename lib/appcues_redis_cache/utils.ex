@@ -1,16 +1,38 @@
 defmodule Appcues.RedisCache.Utils do
-  defp config(module) do
+  @moduledoc false
+
+  @doc ~S"""
+  Returns the `:appcues_redis_cache` config for the given module,
+  or `[]` if it doesn't exist.
+  """
+  @spec config(atom) :: Keyword.t
+  def config(module) do
     Application.get_env(:appcues_redis_cache, module) || []
   end
 
-  defp config(module, key) do
+  @doc ~S"""
+  Returns the requested `:appcues_redis_cache` config for the given
+  module.
+  """
+  @spec config(atom, atom) :: any
+  def config(module, key) do
     config(module)[key]
   end
 
+
   @doc ~S"""
-  Returns a `:poolboy.child_spec/3` for the given module and pool name.
+  Returns the pool name for the given module.
   """
-  def poolboy_child_spec(module, pool_name) do
+  @spec pool_name(atom) :: atom
+  def pool_name(module), do: Module.concat(module, Pool)
+
+
+  @doc ~S"""
+  Returns a `:poolboy.child_spec/3` for the given module.
+  """
+  def poolboy_child_spec(module) do
+    pool_name = pool_name(module)
+
     poolboy_config = [
       name: {:local, pool_name},
       worker_module: Appcues.RedisCache.Worker,

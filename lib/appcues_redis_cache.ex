@@ -1,6 +1,15 @@
 defmodule Appcues.RedisCache do
   @moduledoc ~S"""
+  `Appcues.RedisCache` provides a pool of connections to a Redis instance,
+  and implements `get`, `set`, and `get_or_store` in addition to a generic
+  `command` interface.
+
   Example usage:
+
+      # lib/my_app/redis_cache.ex
+      defmodule MyApp.RedisCache do
+        use Appcues.RedisCache
+      end
 
       # config/config.exs
       config :appcues_redis_cache, MyApp.RedisCache,
@@ -8,11 +17,6 @@ defmodule Appcues.RedisCache do
         pool_size: 50,
         pool_max_overflow: 200,
         default_ttl: 5 * 60_000 # 5 minutes
-
-      # lib/my_app/redis_cache.ex
-      defmodule MyApp.RedisCache do
-        use Appcues.RedisCache
-      end
 
       # lib/my_app.ex
       defmodule MyApp do
@@ -39,7 +43,9 @@ defmodule Appcues.RedisCache do
 
       {:ok, my_val} = MyApp.RedisCache.get("my_val_cache_key")
 
-      :ok = MyApp.RedisCache.put("my_val_cache_key", "new_value", opts)
+      :ok = MyApp.RedisCache.set("my_val_cache_key", "new_value", opts)
+
+      {:ok, _} = MyApp.RedisCache.command(["SET", "x", "y", "PX", "60000"])
   """
 
   @type json_encodable ::
@@ -51,8 +57,6 @@ defmodule Appcues.RedisCache do
 
   defmacro __using__(_args) do
     quote do
-      @pool_name Module.concat(__MODULE__, Pool)
-
       use Supervisor
 
       @doc false
@@ -62,7 +66,7 @@ defmodule Appcues.RedisCache do
 
       @doc false
       def init(_opts) do
-        poolboy_child_spec = Appcues.RedisCache.Utils.poolboy_child_spec(__MODULE__, @pool_name)
+        poolboy_child_spec = Appcues.RedisCache.Utils.poolboy_child_spec(__MODULE__)
         supervise([poolboy_child_spec], strategy: :one_for_one)
       end
 
@@ -73,7 +77,7 @@ defmodule Appcues.RedisCache do
       """
       @spec get(Appcues.RedisCache.json_encodable, Keyword.t) :: {:ok, Appcues.RedisCache.json_encodable} | {:error, any}
       def get(key, opts \\ []) do
-        Appcues.RedisCache.Calls.get_with_pool(key, opts, @pool_name)
+        Appcues.RedisCache.Calls.get(key, opts, __MODULE__)
       end
 
       @doc ~S"""
@@ -93,7 +97,7 @@ defmodule Appcues.RedisCache do
       """
       @spec set(Appcues.RedisCache.json_encodable, Appcues.RedisCache.json_encodable, Keyword.t) :: :ok | {:error, any}
       def set(key, value, opts \\ []) do
-        Appcues.RedisCache.Calls.set_with_pool(key, value, opts, @pool_name)
+        Appcues.RedisCache.Calls.set(key, value, opts, __MODULE__)
       end
 
       @doc ~S"""
@@ -104,7 +108,6 @@ defmodule Appcues.RedisCache do
       @spec set(Appcues.RedisCache.json_encodable, Appcues.RedisCache.json_encodable, Keyword.t) :: :ok | no_return
       def set!(key, value, opts \\ []) do
         :ok = set(key, value, opts)
-        :ok
       end
 
 
@@ -119,7 +122,7 @@ defmodule Appcues.RedisCache do
 
       @spec get_or_store(Appcues.RedisCache.json_encodable, Keyword.t, (() -> Appcues.RedisCache.json_encodable)) :: {:ok, Appcues.RedisCache.json_encodable} | {:error, any}
       def get_or_store(key, opts, fun) do
-        Appcues.RedisCache.Calls.get_or_store_with_pool(key, opts, fun, @pool_name)
+        Appcues.RedisCache.Calls.get_or_store(key, opts, fun, __MODULE__)
       end
 
 
@@ -136,6 +139,15 @@ defmodule Appcues.RedisCache do
       def get_or_store!(key, opts, fun) do
         {:ok, val} = get_or_store(key, opts, fun)
         val
+      end
+
+
+      @doc ~S"""
+      Executes an arbitrary Redis command.
+      """
+      @spec command([String.t]) :: {:ok, String.t | nil} | {:error, any}
+      def command(cmd) do
+        Appcues.RedisCache.Calls.command(cmd, __MODULE__)
       end
 
     end

@@ -46,6 +46,13 @@ defmodule Appcues.RedisCache.LiveTests do
     end
   end
 
+  context "command" do
+    it "accepts valid input" do
+      assert({:ok, _} = Appcues.TestRedisCache.command(["SET", "cmd1", "22", "PX", "1000"]))
+      assert({:ok, 22} = Appcues.TestRedisCache.get("cmd1"))
+    end
+  end
+
   context "multiple caches, multiple modules" do
     it "keeps caches separate" do
       assert({:ok, nil} = Appcues.TestRedisCache.get(:separate))

@@ -1,51 +1,63 @@
 defmodule Appcues.RedisCache.Calls do
   @moduledoc ~S"""
-  Handles `get`, `set`, and `get_or_store` calls to an
+  Handles `get`, `set`, `get_or_store`, and `command` calls to an
   `Appcues.RedisCache` pool.
   """
 
-  @spec get_with_pool(Appcues.RedisCache.json_encodable, Keyword.t, atom) :: {:ok, Appcues.RedisCache.json_encodable} | {:error, any}
-  def get_with_pool(key, opts, pool_name) do
-    with {:ok, key_string} <- Poison.encode(key)
-    do
-      :poolboy.transaction pool_name, fn (worker_pid) ->
-        case :gen_server.call(worker_pid, {:get, key_string, opts}) do
-          {:ok, nil} ->
-            {:ok, nil}
-          {:ok, value_string} ->
-            Poison.decode(value_string)
-          {:error, e} ->
-            {:error, e}
-        end
+  alias Appcues.RedisCache.Utils
+
+  @type key :: String.t | atom
+  @type value :: Appcues.RedisCache.json_encodable
+
+  @spec get(key, Keyword.t, atom) :: {:ok, value} | {:error, any}
+  def get(key, opts, module) do
+    try do
+      key_string = to_string(key)
+      case command(["GET", key_string], module) do
+        {:ok, nil} -> {:ok, nil}
+        {:ok, val} -> Poison.decode(val)
+        {:error, e} -> {:error, e}
       end
+    rescue
+      e -> {:error, e}
     end
   end
 
-  @spec set_with_pool(Appcues.RedisCache.json_encodable, Appcues.RedisCache.json_encodable, Keyword.t, atom) :: :ok | {:error, any}
-  def set_with_pool(key, value, opts, pool_name) do
-    with {:ok, key_string} <- Poison.encode(key),
-         {:ok, value_string} <- Poison.encode(value)
-    do
-      :poolboy.transaction pool_name, fn (worker_pid) ->
-        :gen_server.call(worker_pid, {:set, key_string, value_string, opts})
-      end
+  @spec set(key, value, Keyword.t, atom) :: :ok | {:error, any}
+  def set(key, value, opts, module) do
+    try do
+      key_string = to_string(key)
+      value_string = Poison.encode!(value)
+      ttl = opts[:ttl] || Utils.config(module, :default_ttl)
+      {:ok, _} = command(["SET", key_string, value_string, "PX", "#{ttl}"], module)
+      :ok
+    rescue
+      e -> {:error, e}
     end
   end
 
-  @spec get_or_store_with_pool(Appcues.RedisCache.json_encodable, Keyword.t, (() -> Appcues.RedisCache.json_encodable), atom) :: {:ok, Appcues.RedisCache.json_encodable} | {:error, any}
-  def get_or_store_with_pool(key, opts, fun, pool_name) do
-    with {:ok, val} <- get_with_pool(key, opts, pool_name)
+  @spec get_or_store(key, Keyword.t, (() -> value), atom) :: {:ok, value} | {:error, any}
+  def get_or_store(key, opts, fun, module) do
+    with {:ok, val} <- get(key, opts, module)
     do
       case val do
         nil ->
           new_val = fun.()
-          case set_with_pool(key, new_val, opts, pool_name) do
+          case set(key, new_val, opts, module) do
             :ok -> {:ok, new_val}
             {:error, e} -> {:error, e}
           end
         val ->
           {:ok, val}
       end
+    end
+  end
+
+  @spec command([String.t], atom) :: {:ok, String.t | nil} :: {:error, any}
+  def command(cmd, module) do
+    pool_name = Utils.pool_name(module)
+    :poolboy.transaction pool_name, fn (worker_pid) ->
+      :gen_server.call(worker_pid, {:command, cmd})
     end
   end
 
