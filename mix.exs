@@ -22,7 +22,7 @@ defmodule Api.RedisCache.Mixfile do
     [
       {:poison, "~> 1.0"},
       {:poolboy, "~> 1.5.1"},
-      {:redix, "~> 0.4.0"},
+      {:redix, "~> 0.10.0"},
       {:ex_spec, "~> 2.0", only: :test},
       {:ex_doc, ">= 0.0.0", only: :dev},
     ]
