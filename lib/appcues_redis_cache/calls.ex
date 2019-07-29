@@ -15,7 +15,7 @@ defmodule Appcues.RedisCache.Calls do
       key_string = to_string(key)
       case command(["GET", key_string], module) do
         {:ok, nil} -> {:ok, nil}
-        {:ok, val} -> Poison.decode(val)
+        {:ok, val} -> Jason.decode(val)
         {:error, e} -> {:error, e}
       end
     rescue
@@ -27,7 +27,7 @@ defmodule Appcues.RedisCache.Calls do
   def set(key, value, opts, module) do
     try do
       key_string = to_string(key)
-      value_string = Poison.encode!(value)
+      value_string = Jason.encode!(value)
       ttl = opts[:ttl] || Utils.config(module, :default_ttl)
       {:ok, _} = command(["SET", key_string, value_string, "PX", "#{ttl}"], module)
       :ok
