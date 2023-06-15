@@ -20,7 +20,7 @@ defmodule Api.RedisCache.Mixfile do
 
   defp deps do
     [
-      {:poison, "~> 1.0"},
+      {:poison, "~> 5.0"},
       {:poolboy, "~> 1.5.1"},
       {:redix, "~> 0.4.0"},
       {:ex_spec, "~> 2.0", only: :test},
